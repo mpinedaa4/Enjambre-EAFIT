@@ -5,6 +5,8 @@ import {
   ManyToOne,
   JoinColumn,
   PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { Group } from '../../groups/entities/group.entity.js';
 import { Committee } from '../../committees/entities/committee.entity.js';
@@ -44,4 +46,10 @@ export class Activity {
 
   @OneToMany('Permanence', 'activity')
   permanences: Permanence[];
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

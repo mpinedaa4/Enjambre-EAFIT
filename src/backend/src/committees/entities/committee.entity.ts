@@ -7,6 +7,8 @@ import {
   JoinColumn,
   JoinTable,
   PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { Group } from '../../groups/entities/group.entity.js';
 import { Activity } from '../../activities/entities/activity.entity.js';
@@ -17,11 +19,14 @@ export class Committee {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ type: 'varchar', length: 255 })
   name: string;
 
-  @ManyToOne('Group', 'committees', { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'id_group' })
+  @ManyToOne(() => Group, (group) => group.committees, {
+    eager: true,
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ referencedColumnName: 'id' })
   group: Group;
 
   @OneToMany('Activity', 'committee')
@@ -30,4 +35,10 @@ export class Committee {
   @ManyToMany('Member', 'committees')
   @JoinTable()
   members: Member[];
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }
