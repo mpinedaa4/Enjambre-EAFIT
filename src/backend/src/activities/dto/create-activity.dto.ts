@@ -12,10 +12,6 @@ export class CreateActivityDto {
   @IsInt()
   weight: number;
 
-  @IsString()
-  @IsNotEmpty()
-  period: string;
-
   @IsInt()
   groupId: number;
 

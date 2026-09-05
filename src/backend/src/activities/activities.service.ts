@@ -23,7 +23,10 @@ export class ActivitiesService {
   }
 
   async create(createActivityDto: CreateActivityDto): Promise<Activity> {
-    const activity = this.activitiesRepository.create(createActivityDto);
+    const activity = this.activitiesRepository.create({
+      ...createActivityDto,
+      period: this.getCurrentPeriod(),
+    });
 
     return this.activitiesRepository.save(activity);
   }
@@ -42,5 +45,13 @@ export class ActivitiesService {
     const activity = await this.findById(id);
 
     await this.activitiesRepository.remove(activity);
+  }
+
+  private getCurrentPeriod(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const semester = now.getMonth() < 6 ? 1 : 2;
+
+    return `${year}-${semester}`;
   }
 }
