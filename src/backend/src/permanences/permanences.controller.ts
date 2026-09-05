@@ -1,4 +1,6 @@
 import { Controller, Body, Param, ParseIntPipe, Get, Post, Patch, Delete } from '@nestjs/common';
+import { DeleteResult } from 'typeorm';
+
 import { Permanence } from './entities/permanence.entity.js';
 import { PermanencesService } from './permanences.service.js';
 import { CreatePermanenceDto } from './dto/create-permanence.dto.js';
@@ -27,7 +29,7 @@ export class PermanencesController {
   }
 
   @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+  async remove(@Param('id', ParseIntPipe) id: number): Promise<DeleteResult> {
     return await this.permanencesService.remove(id);
   }
 }
