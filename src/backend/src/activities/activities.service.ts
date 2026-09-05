@@ -5,6 +5,7 @@ import { Repository, DeleteResult } from 'typeorm';
 import { Activity } from './entities/activity.entity.js';
 import { CreateActivityDto } from './dto/create-activity.dto.js';
 import { UpdateActivityDto } from './dto/update-activity.dto.js';
+import { getCurrentPeriod } from '../utils/period.util.js';
 import { GroupsService } from '../groups/groups.service.js';
 import { CommitteesService } from '../committees/committees.service.js';
 
@@ -30,11 +31,21 @@ export class ActivitiesService {
   async create(createActivityDto: CreateActivityDto): Promise<Activity> {
     const { groupId, committeeId, ...activityData } = createActivityDto;
     const group = await this.groupsService.findById(groupId);
-    const committee = await this.committeesService.findById(committeeId);
+    const committee = committeeId === null
+      ? null
+      : await this.committeesService.findById(committeeId);
+    
+    if (!group) {
+      throw new NotFoundException(`Group with id ${groupId} not found`);
+    }
+
+    if (committeeId !== null && !committee) {
+      throw new NotFoundException(`Committee with id ${committeeId} not found`);
+    }
 
     const activity = this.activitiesRepository.create({
       ...activityData,
-      period: this.getCurrentPeriod(),
+      period: getCurrentPeriod(),
       group,
       committee,
     });
@@ -47,7 +58,7 @@ export class ActivitiesService {
     updateActivityDto: UpdateActivityDto,
   ): Promise<Activity> {
     const { groupId, committeeId, ...activityData } = updateActivityDto;
-    
+
     const activity = await this.activitiesRepository.preload({
       id,
       ...activityData,
@@ -62,8 +73,10 @@ export class ActivitiesService {
       activity.group = group;
     }
 
-    if (committeeId) {
-      const committee = await this.committeesService.findById(committeeId);
+    if (committeeId !== undefined) {
+      const committee = committeeId === null
+      ? null
+      : await this.committeesService.findById(committeeId);
       activity.committee = committee;
     }
 
@@ -72,13 +85,5 @@ export class ActivitiesService {
 
   async remove(id: number): Promise<DeleteResult> {
     return await this.activitiesRepository.delete(id);
-  }
-
-  private getCurrentPeriod(): string {
-    const now = new Date();
-    const year = now.getFullYear();
-    const semester = now.getMonth() < 6 ? 1 : 2;
-
-    return `${year}-${semester}`;
   }
 }
