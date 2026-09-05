@@ -15,24 +15,31 @@ export class Activity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ type: 'varchar', length: 255 })
   name: string;
 
-  @Column()
+  @Column({ type: 'text' })
   description: string;
 
-  @Column()
+  @Column({ type: 'int' })
   weight: number;
 
-  @Column()
+  @Column({ type: 'varchar', length: 5 })
   period: string;
 
-  @ManyToOne('Group', 'activities', { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'id_group' })
+  @ManyToOne(() => Group, (group) => group.activities, {
+    eager: true,
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ referencedColumnName: 'id' })
   group: Group;
 
-  @ManyToOne('Committee', 'activities', { nullable: true, onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'id_committee' })
+  @ManyToOne(() => Committee, (committee) => committee.activities, {
+    eager: true,
+    nullable: true,
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ referencedColumnName: 'id' })
   committee: Committee | null;
 
   @OneToMany('Permanence', 'activity')
