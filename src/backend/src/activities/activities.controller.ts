@@ -1,4 +1,5 @@
 import { Controller, Body, Param, ParseIntPipe, Get, Post, Patch, Delete } from '@nestjs/common';
+import { DeleteResult } from 'typeorm';
 import { Activity } from './entities/activity.entity.js';
 import { ActivitiesService } from './activities.service.js';
 import { CreateActivityDto } from './dto/create-activity.dto.js';
@@ -27,7 +28,7 @@ export class ActivitiesController {
   }
 
   @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+  async remove(@Param('id', ParseIntPipe) id: number): Promise<DeleteResult> {
     return await this.activitiesService.remove(id);
   }
 }

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsInt, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsInt, ValidateIf } from 'class-validator';
 
 export class CreateActivityDto {
   @IsString()
@@ -12,14 +12,10 @@ export class CreateActivityDto {
   @IsInt()
   weight: number;
 
-  @IsString()
-  @IsNotEmpty()
-  period: string;
-
   @IsInt()
   groupId: number;
 
-  @IsOptional()
+  @ValidateIf((object, value) => value !== null)
   @IsInt()
-  committeeId?: number;
+  committeeId: number | null;
 }

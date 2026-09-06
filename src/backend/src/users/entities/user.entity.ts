@@ -4,6 +4,8 @@ import {
   PrimaryGeneratedColumn,
   OneToOne,
   JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { Group } from '../../groups/entities/group.entity.js';
 
@@ -12,16 +14,22 @@ export class User {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ unique: true })
+  @Column({ type: 'varchar', length: 255, unique: true })
   username: string;
 
-  @Column()
+  @Column({ type: 'varchar', length: 100 })
   password: string;
 
-  @Column()
+  @Column({ type: 'varchar', length: 100 })
   role: string;
 
   @OneToOne('Group', 'user', { nullable: true, onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'id_group' })
+  @JoinColumn({ referencedColumnName: 'id' })
   group: Group | null;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }
