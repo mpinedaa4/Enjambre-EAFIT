@@ -26,6 +26,8 @@ Roles de usuario:
 | `BOARD` | Junta directiva de **un** grupo   | Gestiona miembros / actividades / permanencia |
 
 Cuentas demo (del `.env` del backend): `admin` / `admin123` · `junta.spie` / `junta123`.
+El seed crea además una cuenta `BOARD` por cada grupo del catálogo (`junta.oe`,
+`junta.ieee`, `junta.innovacion`, `junta.datos`), todas con `BOARD_PASSWORD`.
 
 ---
 
@@ -59,7 +61,8 @@ src/backend/src/
   permanences/  Permanence (puntos de un miembro en una actividad)
   database/
     data-source.ts     DataSource para el seed
-    seeds/index.ts      orquesta los seeders en orden
+    seeds/index.ts      orquesta los seeders en orden (soporta --fresh)
+    seeds/data/         catálogo + plan determinista de los datos de demostración
   utils/period.util.ts  getCurrentPeriod() -> "YYYY-S" (S = 1 si mes < 6, si no 2)
   main.ts       prefijo global 'api' + ValidationPipe({ whitelist, forbidNonWhitelisted, transform })
 
@@ -99,17 +102,22 @@ npm run dev                   # http://localhost:5173
 ### Reiniciar la base de datos
 
 No hay migraciones. `synchronize: true` recrea el esquema al conectar; los seeders
-son **idempotentes** (comprueban antes de insertar).
+son **idempotentes** (comprueban antes de insertar, nunca actualizan).
 
 ```powershell
 cd src/backend
-Remove-Item database.sqlite -ErrorAction SilentlyContinue
-npm run seed        # recrea esquema + datos
+npm run seed          # agrega lo que falte
+npm run seed:fresh    # drop + synchronize + sembrar de cero (no borra el archivo)
 ```
 
 Orden del seed ([`seeds/index.ts`](../../src/backend/src/database/seeds/index.ts)):
-grupos → usuarios → estados de miembro → miembros → group-members → comités →
-actividades → permanencias.
+grupos → usuarios → estados de miembro → miembros → group-members → comités
+(+ sus integrantes) → actividades → permanencias.
+
+Los datos son **generados y deterministas**: `seeds/data/catalog.ts` define grupos,
+comités, actividades y estados; `seeds/data/plan.ts` arma el plan completo con un
+PRNG con semilla (`SEED_MEMBERS`, por defecto 150, y `SEED_RANDOM_SEED`). Cambiar el
+catálogo no afecta a una BD ya sembrada: hay que correr `npm run seed:fresh`.
 
 ### Scripts que deben pasar antes de dar algo por terminado
 

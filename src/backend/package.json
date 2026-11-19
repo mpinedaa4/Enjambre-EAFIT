@@ -20,7 +20,8 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "seed": "node --loader ts-node/esm src/database/seeds/index.ts"
+    "seed": "node --loader ts-node/esm src/database/seeds/index.ts",
+    "seed:fresh": "node --loader ts-node/esm src/database/seeds/index.ts --fresh"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

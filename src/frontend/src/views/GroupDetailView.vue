@@ -183,7 +183,7 @@ onMounted(() => {
             >
               <i class="fa-solid fa-database" />
             </span>
-            <p class="text-sm font-bold text-ink">Base de datos del grupo</p>
+            <p class="text-sm font-bold text-ink">Miembros del Grupo</p>
           </div>
           <p class="mt-3 text-sm text-slate-500">
             {{ memberCount }} integrante(s) registrado(s). Abre la tabla para gestionarlos.

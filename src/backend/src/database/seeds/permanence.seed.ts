@@ -2,39 +2,64 @@ import { AppDataSource } from '../data-source.js';
 import { Permanence } from '../../permanences/entities/permanence.entity.js';
 import { Member } from '../../members/entities/member.entity.js';
 import { Activity } from '../../activities/entities/activity.entity.js';
+import { Group } from '../../groups/entities/group.entity.js';
+import type { SeedPlan } from './data/plan.js';
+import { CHUNK_SIZE, chunk, logStep } from './data/report.util.js';
 
-// Puntos obtenidos por actividad (nunca más que su peso). Juan suma 75 y
-// cumple su objetivo de 70; María suma 45 y no llega al suyo de 80.
-const PERMANENCES = [
-  { idEpik: 1001, activityName: 'Asistencia a asambleas', percentage: 30 },
-  { idEpik: 1001, activityName: 'Participación en eventos', percentage: 25 },
-  { idEpik: 1001, activityName: 'Publicaciones en redes', percentage: 20 },
-  { idEpik: 1002, activityName: 'Asistencia a asambleas', percentage: 20 },
-  { idEpik: 1002, activityName: 'Participación en eventos', percentage: 10 },
-  { idEpik: 1002, activityName: 'Informe de presupuesto', percentage: 15 },
-];
-
-export async function seedPermanences() {
+// Puntos obtenidos por cada integrante en cada actividad. Nunca superan el
+// peso de la actividad, y solo se registran para actividades de su grupo (y de
+// sus comités): son las mismas reglas que valida `permanences.service.ts`.
+// Lo que no se califica no tiene fila, igual que en la aplicación.
+export async function seedPermanences(plan: SeedPlan): Promise<void> {
   const repository = AppDataSource.getRepository(Permanence);
   const memberRepository = AppDataSource.getRepository(Member);
   const activityRepository = AppDataSource.getRepository(Activity);
+  const groupRepository = AppDataSource.getRepository(Group);
 
-  for (const data of PERMANENCES) {
-    const member = await memberRepository.findOne({
-      where: {
-        idEpik: data.idEpik,
-      },
-    });
+  const membersByIdEpik = new Map(
+    (await memberRepository.find()).map((member) => [member.idEpik, member]),
+  );
+  const groupsByName = new Map(
+    (await groupRepository.find()).map((group) => [group.name, group]),
+  );
+  const activitiesByKey = new Map(
+    (await activityRepository.find()).map((activity) => {
+      const groupId = activity.group?.id ?? activity.groupId;
+      const committeeName = activity.committee?.name ?? null;
 
-    const activity = await activityRepository.findOne({
-      where: {
-        name: data.activityName,
-      },
-    });
+      return [
+        `${groupId}:${committeeName ?? 'general'}:${activity.name}`,
+        activity,
+      ];
+    }),
+  );
 
-    if (!member || !activity) {
+  const existingKeys = new Set(
+    (await repository.find()).map(
+      (permanence) =>
+        `${permanence.member?.id ?? permanence.memberId}:${permanence.activity?.id ?? permanence.activityId}`,
+    ),
+  );
+
+  const missing: Permanence[] = [];
+
+  for (const data of plan.permanences) {
+    const member = membersByIdEpik.get(data.idEpik);
+    const group = groupsByName.get(data.groupName);
+
+    if (!member || !group) {
       throw new Error(
         'No se encontraron las entidades necesarias para Permanence.',
+      );
+    }
+
+    const activity = activitiesByKey.get(
+      `${group.id}:${data.committeeName ?? 'general'}:${data.activityName}`,
+    );
+
+    if (!activity) {
+      throw new Error(
+        `No existe la actividad "${data.activityName}" en "${group.name}".`,
       );
     }
 
@@ -44,34 +69,18 @@ export async function seedPermanences() {
       );
     }
 
-    const existing = await repository.findOne({
-      where: {
-        member: {
-          id: member.id,
-        },
-        activity: {
-          id: activity.id,
-        },
-      },
-    });
-
-    if (existing) {
-      console.log(
-        `La permanencia de "${member.fullName}" en "${data.activityName}" ya existe.`,
-      );
+    if (existingKeys.has(`${member.id}:${activity.id}`)) {
       continue;
     }
 
-    const permanence = repository.create({
-      percentage: data.percentage,
-      member,
-      activity,
-    });
-
-    await repository.save(permanence);
-
-    console.log(
-      `Permanencia de "${member.fullName}" en "${data.activityName}" creada.`,
+    missing.push(
+      repository.create({ percentage: data.percentage, member, activity }),
     );
   }
+
+  for (const block of chunk(missing, CHUNK_SIZE)) {
+    await repository.save(block);
+  }
+
+  logStep('Puntajes', missing.length, plan.permanences.length - missing.length);
 }

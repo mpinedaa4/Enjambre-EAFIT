@@ -4,6 +4,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 /* Internal Imports */
+import ActivityDetailModal from '@/components/ActivityDetailModal.vue';
 import ActivityFormModal from '@/components/ActivityFormModal.vue';
 import AppButton from '@/components/AppButton.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
@@ -37,6 +38,7 @@ const router = useRouter();
 const activeSheetKey = ref<PermanenceSheetKey>('general');
 const isFormOpen = ref<boolean>(false);
 const editingActivity = ref<Nullable<ActivityInterface>>(null);
+const viewingActivity = ref<Nullable<ActivityInterface>>(null);
 const activityPendingDelete = ref<Nullable<ActivityInterface>>(null);
 const isExporting = ref<boolean>(false);
 const isLoading = ref<boolean>(true);
@@ -158,6 +160,11 @@ function selectSheet(key: PermanenceSheetKey): void {
 function openCreate(): void {
   editingActivity.value = null;
   isFormOpen.value = true;
+}
+
+function openView(activityId: number): void {
+  viewingActivity.value =
+    sheet.value?.activityColumns.find((activity) => activity.id === activityId) ?? null;
 }
 
 function openEdit(activityId: number): void {
@@ -344,9 +351,12 @@ onMounted(() => {
         v-if="sheet !== null"
         :sheet="sheet"
         @set-value="onSetValue"
+        @view-activity="openView"
         @edit-activity="openEdit"
         @delete-activity="requestDeleteActivity"
       />
+
+      <ActivityDetailModal :activity="viewingActivity" @close="viewingActivity = null" />
 
       <ActivityFormModal
         :open="isFormOpen"

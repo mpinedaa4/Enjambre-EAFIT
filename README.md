@@ -47,13 +47,19 @@ npm run dev                   # app en http://localhost:5173
 Abre <http://localhost:5173> e inicia sesión con una de las **cuentas de
 demostración**:
 
-| Rol                         | Usuario      | Contraseña  |
-| --------------------------- | ------------ | ----------- |
-| Administrador (Desarrollo Estudiantil) | `admin`      | `admin123`  |
-| Junta directiva (grupo SPIE)           | `junta.spie` | `junta123`  |
+| Rol                                    | Usuario            | Contraseña |
+| -------------------------------------- | ------------------ | ---------- |
+| Administrador (Desarrollo Estudiantil) | `admin`            | `admin123` |
+| Junta de SPIE                          | `junta.spie`       | `junta123` |
+| Junta de Organización Estudiantil (OE) | `junta.oe`         | `junta123` |
+| Junta de Capítulo IEEE EAFIT           | `junta.ieee`       | `junta123` |
+| Junta de Innovación y Emprendimiento   | `junta.innovacion` | `junta123` |
+| Junta de Semillero de Ciencia de Datos | `junta.datos`      | `junta123` |
 
-> Estas credenciales salen de las variables `ADMIN_*` / `BOARD_*` del `.env` del
-> backend; cámbialas ahí y vuelve a seedear si quieres otras.
+> `admin` y `junta.spie` salen de las variables `ADMIN_*` / `BOARD_*` del `.env`
+> del backend; las demás juntas usan el nombre que define el catálogo del seeder
+> y la misma `BOARD_PASSWORD`. Cambia el `.env` y vuelve a seedear
+> (`npm run seed:fresh`) si quieres otras credenciales.
 
 ---
 
@@ -71,8 +77,11 @@ Copia `.env.example` a `.env`. Variables:
 | `CORS_ORIGIN`     | No          | `http://localhost:5173`  | Orígenes permitidos por CORS, separados por comas.                  |
 | `ADMIN_USERNAME`  | Para seed   | —                        | Usuario admin que crea `npm run seed`.                              |
 | `ADMIN_PASSWORD`  | Para seed   | —                        | Contraseña del admin (se guarda hasheada con bcrypt).              |
-| `BOARD_USERNAME`  | Para seed   | —                        | Usuario de junta del grupo SPIE.                                    |
-| `BOARD_PASSWORD`  | Para seed   | —                        | Contraseña de la junta.                                             |
+| `BOARD_USERNAME`  | Para seed   | —                        | Usuario de junta del **primer** grupo (SPIE).                       |
+| `BOARD_PASSWORD`  | Para seed   | —                        | Contraseña de **todas** las juntas.                                 |
+| `SEED_MEMBERS`    | No          | `150`                    | Cuántos integrantes genera el seeder.                               |
+| `SEED_RANDOM_SEED`| No          | `20261118`               | Semilla del generador: misma semilla ⇒ mismos datos.                |
+| `SEED_FRESH`      | No          | —                        | `1` para borrar y recrear el esquema antes de sembrar.              |
 
 Genera un `JWT_SECRET` aleatorio, por ejemplo:
 
@@ -87,37 +96,130 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 - El esquema se crea **automáticamente** con `synchronize: true` de TypeORM: tanto
   al levantar el servidor (`npm run start:dev`) como al correr `npm run seed`.
 - No hay migraciones. Si cambias una entidad, TypeORM intenta ajustar el esquema en
-  caliente; ante problemas, **borra `database.sqlite` y vuelve a seedear**.
+  caliente; ante problemas, **re‑seedea desde cero** con `npm run seed:fresh`
+  (ver [3.3](#33-sembrar-datos-npm-run-seed)).
 
 ### 3.3. Sembrar datos (`npm run seed`)
 
 ```bash
 cd src/backend
-npm run seed
+npm run seed          # agrega lo que falte, sin tocar lo que ya existe
+npm run seed:fresh    # BORRA todo y vuelve a sembrar desde cero
 ```
 
-Ejecuta `src/database/seeds/index.ts`, que crea (si no existen ya) en este orden:
+Ejecuta `src/database/seeds/index.ts`, que siembra en este orden:
 
-1. **Grupos**: `SPIE` y `Organización Estudiantil (OE)`.
-2. **Usuarios**: `admin` (rol `ADMIN`) y el usuario de junta (rol `BOARD`, ligado a
-   SPIE). Las contraseñas se hashean con bcrypt.
-3. **Estados de miembro** del grupo SPIE (con su objetivo `target` de permanencia).
-4. **Miembros** de ejemplo.
-5. **Vínculos miembro↔grupo** (`group_member`).
-6. **Comités** del grupo SPIE.
-7. **Actividades** (generales y de comité).
-8. **Permanencias** (valores de cada miembro en cada actividad).
+1. **Grupos** (5, del catálogo del seeder).
+2. **Usuarios**: `admin` (rol `ADMIN`) y una cuenta de junta (rol `BOARD`) por
+   grupo. Las contraseñas se hashean con bcrypt.
+3. **Estados de miembro** de cada grupo (5 por grupo, con su objetivo `target`).
+4. **Integrantes** (150 por defecto, generados con nombres, programas, documento,
+   correo y celular ficticios pero únicos).
+5. **Vínculos integrante↔grupo** (`group_member`), cada uno con su estado. Un ~10 %
+   pertenece a dos grupos.
+6. **Comités** de cada grupo y los integrantes de cada comité.
+7. **Actividades**: la hoja general de cada grupo (pesos que suman 60 %) y la hoja
+   de cada comité (40 %), de modo que un integrante puede llegar a 100 puntos.
+8. **Puntajes** (`permanence`) de cada integrante en las actividades que le aplican.
+   Un ~12 % de las casillas queda **sin calificar** a propósito (así se ve en la
+   aplicación: lo que no se califica no tiene fila).
 
-El seed es **idempotente**: si un registro ya existe lo salta. Para **empezar de
-cero**:
+Volumen que deja el seed por defecto:
+
+| Tabla               | Filas |
+| ------------------- | ----- |
+| `group`             | 5     |
+| `user`              | 6     |
+| `member_status`     | 25    |
+| `committee`         | 14    |
+| `member`            | 150   |
+| `group_member`      | 166   |
+| `committee_member`  | 171   |
+| `activity`          | 53    |
+| `permanence`        | 946   |
+
+Al terminar imprime un resumen (cuántas filas nuevas por tabla) y los totales.
+
+#### Cómo re‑seedear
+
+El seed es **idempotente**: comprueba antes de insertar, así que `npm run seed` dos
+veces seguidas no duplica nada (la segunda reporta `0 nuevos`). Esto sirve para
+**completar** datos que falten, pero **no** actualiza ni borra lo que ya está.
+
+Para empezar de cero — que es lo que quieres cuando cambiaste una entidad, cambiaste
+el catálogo del seeder o la base quedó inconsistente:
 
 ```bash
-rm src/backend/database.sqlite   # (Windows: del src\backend\database.sqlite)
+cd src/backend
+npm run seed:fresh
+```
+
+`seed:fresh` **borra todas las tablas, las vuelve a crear** (`synchronize`) y siembra
+de nuevo. Equivale a `npm run seed -- --fresh` o a `SEED_FRESH=1 npm run seed`.
+
+> ⚠️ Borra **todo**, incluidos los datos que hayas creado tú desde la aplicación.
+> Para en una terminal el backend (`npm run start:dev`) antes de correrlo.
+
+Si prefieres borrar el archivo de la base a mano, también funciona:
+
+```powershell
+# PowerShell (Windows)
+cd src\backend
+Remove-Item database.sqlite -ErrorAction SilentlyContinue
 npm run seed
 ```
 
-> El seed usa el loader `ts-node/esm`. En Node 24 puede imprimir un aviso de
-> _deprecation_ sobre `--loader`; es inofensivo.
+```bash
+# bash / macOS / Linux
+cd src/backend
+rm -f database.sqlite
+npm run seed
+```
+
+(Con el backend corriendo, Windows no deja borrar el archivo: usa `seed:fresh`, que
+no necesita borrarlo.)
+
+#### Tamaño y datos deterministas
+
+El seeder genera los datos con un generador pseudoaleatorio **con semilla**: la misma
+semilla produce exactamente los mismos integrantes y puntajes, así que dos personas
+del equipo sembrando con la misma configuración obtienen la misma base.
+
+| Variable           | Por defecto | Para qué sirve                                      |
+| ------------------ | ----------- | --------------------------------------------------- |
+| `SEED_MEMBERS`     | `150`       | Cuántos integrantes generar.                        |
+| `SEED_RANDOM_SEED` | `20261118`  | Semilla; cámbiala para obtener otro juego de datos. |
+
+```powershell
+# PowerShell: una base grande para probar rendimiento de las tablas
+$env:SEED_MEMBERS = "1000"; npm run seed:fresh
+```
+
+```bash
+# bash
+SEED_MEMBERS=1000 npm run seed:fresh
+```
+
+#### Cómo está organizado el seeder
+
+```
+src/database/seeds/
+├── index.ts                 orquesta los seeders en orden y soporta --fresh
+├── data/
+│   ├── catalog.ts           grupos, comités, actividades, estados, nombres, programas
+│   ├── plan.ts              arma en memoria el plan completo (determinista)
+│   ├── random.util.ts       generador pseudoaleatorio con semilla
+│   └── report.util.ts       resúmenes por consola y guardado por lotes
+└── *.seed.ts                un archivo por tabla; cada uno persiste su parte del plan
+```
+
+Para cambiar **qué** se siembra (otro grupo, otro comité, otra actividad) edita
+`data/catalog.ts`; para cambiar **cuánto** y **cómo** se reparte, `data/plan.ts`. Los
+pesos de cada hoja se validan al sembrar: si un comité del catálogo suma más de
+100 %, el seed falla con un mensaje claro en vez de dejar datos inválidos.
+
+> El seed usa el loader `ts-node/esm`. En Node 24+ imprime un aviso de _deprecation_
+> sobre `--loader`; es inofensivo.
 
 ### 3.4. Levantar el servidor
 
@@ -138,7 +240,8 @@ propiedades no declaradas** (`forbidNonWhitelisted`).
 | `npm run start`      | Servidor sin watch.                                 |
 | `npm run build`      | Compila a `dist/`.                                  |
 | `npm run start:prod` | Ejecuta `dist/main` (requiere `build` previo).      |
-| `npm run seed`       | Crea/actualiza la BD con datos iniciales.           |
+| `npm run seed`       | Siembra lo que falte (idempotente).                 |
+| `npm run seed:fresh` | Borra todo y vuelve a sembrar desde cero.           |
 | `npm run test`       | Tests unitarios (Vitest).                           |
 | `npm run lint`       | oxlint.                                             |
 | `npm run format`     | Prettier `--write`.                                 |
@@ -216,7 +319,8 @@ src/
 │       ├── permanences/     # Permanence (puntos de un miembro en una actividad)
 │       └── database/
 │           ├── data-source.ts      # DataSource para el seed
-│           └── seeds/              # scripts de datos iniciales (index.ts los orquesta)
+│           └── seeds/              # datos de demostración (index.ts los orquesta)
+│               └── data/           # catálogo, plan determinista y utilidades
 └── frontend/
     └── src/
         ├── services/        # una clase por recurso; llaman a la API con axios
@@ -267,6 +371,9 @@ src/
 - **JWT sin refresh**: el token vive `JWT_EXPIRES_IN` (1 día por defecto); al
   expirar hay que volver a iniciar sesión.
 - **SQLite con `synchronize: true`**: cómodo para desarrollo, pero cambios de
-  entidad pueden requerir borrar `database.sqlite` y re‑seedear.
+  entidad pueden requerir re‑seedear desde cero (`npm run seed:fresh`).
 - Tras cambiar los roles a `ADMIN`/`BOARD`, una BD antigua con roles en minúscula
-  no enruta bien: re‑seedea.
+  no enruta bien: `npm run seed:fresh`.
+- **El seed no actualiza**: `npm run seed` solo agrega lo que falta. Si cambias el
+  catálogo de `src/database/seeds/data/`, los registros ya creados se quedan como
+  estaban; usa `npm run seed:fresh` para verlos reflejados.

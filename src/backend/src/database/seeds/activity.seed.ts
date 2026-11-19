@@ -3,94 +3,120 @@ import { Activity } from '../../activities/entities/activity.entity.js';
 import { Group } from '../../groups/entities/group.entity.js';
 import { Committee } from '../../committees/entities/committee.entity.js';
 import { getCurrentPeriod } from '../../utils/period.util.js';
+import { MAX_PERCENTAGE } from '../../utils/validation.util.js';
+import type { ActivityTemplate } from './data/catalog.js';
+import type { SeedPlan } from './data/plan.js';
+import { CHUNK_SIZE, chunk, logStep } from './data/report.util.js';
 
-// Pesos en %. Las actividades generales suman 60 y las de cada comité 40, de
-// modo que un integrante de un comité puede llegar a 100 puntos en total.
-const ACTIVITIES = [
-  {
-    name: 'Asistencia a asambleas',
-    description: 'Asistencia a las asambleas generales del grupo.',
-    weight: 30,
-    committeeName: null,
-  },
-  {
-    name: 'Participación en eventos',
-    description: 'Participación en los eventos organizados por el grupo.',
-    weight: 30,
-    committeeName: null,
-  },
-  {
-    name: 'Publicaciones en redes',
-    description: 'Publicaciones realizadas para las redes del grupo.',
-    weight: 40,
-    committeeName: 'Comité de Comunicaciones',
-  },
-  {
-    name: 'Informe de presupuesto',
-    description: 'Entrega del informe de presupuesto del semestre.',
-    weight: 40,
-    committeeName: 'Comité de Finanzas',
-  },
-];
-
-export async function seedActivities() {
+// Una "hoja" son las actividades generales de un grupo (sin comité) o las de
+// un comité. Los pesos de cada hoja no pueden sumar más de 100: lo valida la
+// API y aquí se comprueba antes de insertar, para que el catálogo no se
+// desconfigure sin que nadie se dé cuenta.
+export async function seedActivities(plan: SeedPlan): Promise<void> {
   const repository = AppDataSource.getRepository(Activity);
   const groupRepository = AppDataSource.getRepository(Group);
   const committeeRepository = AppDataSource.getRepository(Committee);
 
-  const group = await groupRepository.findOne({
-    where: {
-      name: 'SPIE',
-    },
-  });
+  const groupsByName = new Map(
+    (await groupRepository.find()).map((group) => [group.name, group]),
+  );
+  const committeesByKey = new Map(
+    (await committeeRepository.find()).map((committee) => [
+      `${committee.group?.id ?? committee.groupId}:${committee.name}`,
+      committee,
+    ]),
+  );
 
-  if (!group) {
-    throw new Error('No existe el grupo SPIE.');
-  }
+  const existingKeys = new Set(
+    (await repository.find()).map((activity) => activityKey(activity)),
+  );
 
-  for (const data of ACTIVITIES) {
-    const existing = await repository.findOne({
-      where: {
-        name: data.name,
-        group: {
-          id: group.id,
-        },
-      },
-    });
+  const period = getCurrentPeriod();
+  const missing: Activity[] = [];
+  let planned = 0;
 
-    if (existing) {
-      console.log(`Actividad "${data.name}" ya existe.`);
-      continue;
+  for (const template of plan.groups) {
+    const group = groupsByName.get(template.name);
+
+    if (!group) {
+      throw new Error(`No existe el grupo ${template.name}.`);
     }
 
-    let committee: Committee | null = null;
+    const sheets: {
+      committee: Committee | null;
+      activities: ActivityTemplate[];
+    }[] = [{ committee: null, activities: template.generalActivities }];
 
-    if (data.committeeName !== null) {
-      committee = await committeeRepository.findOne({
-        where: {
-          name: data.committeeName,
-          group: {
-            id: group.id,
-          },
-        },
-      });
+    for (const committeeTemplate of template.committees) {
+      const committee = committeesByKey.get(
+        `${group.id}:${committeeTemplate.name}`,
+      );
 
       if (!committee) {
-        throw new Error(`No existe el ${data.committeeName}.`);
+        throw new Error(
+          `No existe el comité "${committeeTemplate.name}" en "${group.name}".`,
+        );
       }
+
+      sheets.push({ committee, activities: committeeTemplate.activities });
     }
 
-    const activity = repository.create({
-      name: data.name,
-      description: data.description,
-      weight: data.weight,
-      period: getCurrentPeriod(),
-      group,
-      committee,
-    });
+    for (const sheet of sheets) {
+      ensureSheetFits(
+        template.name,
+        sheet.committee?.name ?? null,
+        sheet.activities,
+      );
 
-    await repository.save(activity);
+      for (const activity of sheet.activities) {
+        planned += 1;
 
-    console.log(`Actividad "${data.name}" creada.`);
+        const key = `${group.id}:${sheet.committee?.id ?? 'general'}:${activity.name}`;
+
+        if (existingKeys.has(key)) {
+          continue;
+        }
+
+        missing.push(
+          repository.create({
+            name: activity.name,
+            description: activity.description,
+            weight: activity.weight,
+            period,
+            group,
+            committee: sheet.committee,
+          }),
+        );
+      }
+    }
+  }
+
+  for (const block of chunk(missing, CHUNK_SIZE)) {
+    await repository.save(block);
+  }
+
+  logStep('Actividades', missing.length, planned - missing.length);
+}
+
+function activityKey(activity: Activity): string {
+  const groupId = activity.group?.id ?? activity.groupId;
+  const committeeId = activity.committee?.id ?? activity.committeeId ?? null;
+
+  return `${groupId}:${committeeId ?? 'general'}:${activity.name}`;
+}
+
+function ensureSheetFits(
+  groupName: string,
+  committeeName: string | null,
+  activities: { weight: number }[],
+): void {
+  const total = activities.reduce((sum, activity) => sum + activity.weight, 0);
+
+  if (total > MAX_PERCENTAGE) {
+    const sheet = committeeName ?? 'hoja general';
+
+    throw new Error(
+      `Los pesos de "${sheet}" de "${groupName}" suman ${total}%, más del ${MAX_PERCENTAGE}% permitido.`,
+    );
   }
 }

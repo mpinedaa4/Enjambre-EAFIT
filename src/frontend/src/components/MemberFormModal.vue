@@ -13,6 +13,7 @@ import type { MemberFormErrors, MemberFormValues } from '@/utils/memberFormValid
 import type { MemberStatusInterface } from '@/interfaces/MemberStatusInterface';
 import { DOCUMENT_TYPE_OPTIONS } from '@/constants/documentTypes';
 import { LIMITS } from '@/constants/limits';
+import { PROGRAM_OPTIONS } from '@/constants/programs';
 import { hasMemberFormErrors, validateMemberForm } from '@/utils/memberFormValidation';
 
 /* Types */
@@ -41,6 +42,17 @@ watch(
   (open: boolean): void => {
     if (open) {
       resetForm();
+    }
+  },
+);
+
+// El segundo programa no puede repetir al principal: si el usuario cambia el
+// programa y coincide con el segundo, se limpia el segundo.
+watch(
+  () => form.program,
+  (program: string): void => {
+    if (program !== '' && form.secondProgram === program) {
+      form.secondProgram = '';
     }
   },
 );
@@ -198,22 +210,48 @@ function handleClose(): void {
               :error="errors.phone"
               required
             />
-            <AppTextField
-              id="member-program"
-              v-model="form.program"
-              label="Programa"
-              placeholder="INGENIERÍA FÍSICA"
-              :maxlength="LIMITS.NAME_MAX_LENGTH"
-              :error="errors.program"
-              required
-            />
-            <AppTextField
-              id="member-second-program"
-              v-model="form.secondProgram"
-              label="Programa #2"
-              :maxlength="LIMITS.NAME_MAX_LENGTH"
-              :error="errors.secondProgram"
-            />
+            <div class="space-y-1.5">
+              <label for="member-program" class="block text-sm font-semibold text-slate-700">
+                Programa <span class="text-red-500">*</span>
+              </label>
+              <select
+                id="member-program"
+                v-model="form.program"
+                class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-ink outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                :class="errors.program ? 'border-red-400' : 'border-slate-300'"
+              >
+                <option value="" disabled>Selecciona un programa</option>
+                <option v-for="option in PROGRAM_OPTIONS" :key="option" :value="option">
+                  {{ option }}
+                </option>
+              </select>
+              <p v-if="errors.program" class="text-xs font-medium text-red-500">
+                {{ errors.program }}
+              </p>
+            </div>
+            <div class="space-y-1.5">
+              <label for="member-second-program" class="block text-sm font-semibold text-slate-700">
+                Programa #2
+              </label>
+              <select
+                id="member-second-program"
+                v-model="form.secondProgram"
+                class="w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-ink outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                :class="errors.secondProgram ? 'border-red-400' : 'border-slate-300'"
+              >
+                <option value="">Sin segundo programa</option>
+                <option
+                  v-for="option in PROGRAM_OPTIONS.filter((item) => item !== form.program)"
+                  :key="option"
+                  :value="option"
+                >
+                  {{ option }}
+                </option>
+              </select>
+              <p v-if="errors.secondProgram" class="text-xs font-medium text-red-500">
+                {{ errors.secondProgram }}
+              </p>
+            </div>
           </div>
 
           <div class="space-y-1.5">

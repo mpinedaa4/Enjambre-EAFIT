@@ -1,50 +1,25 @@
 import { AppDataSource } from '../data-source.js';
 import { Member } from '../../members/entities/member.entity.js';
+import type { SeedPlan } from './data/plan.js';
+import { CHUNK_SIZE, chunk, logStep } from './data/report.util.js';
 
-// Datos ficticios. `documentType` usa los mismos valores que valida la API y
-// muestra el frontend (ver utils/validation.util.ts).
-export async function seedMembers() {
+// Datos ficticios generados por `data/plan.ts`. El ID EPIK, el documento, el
+// correo y el celular son únicos por construcción, igual que los exige la
+// entidad. `documentType` usa los mismos valores que valida la API
+// (ver utils/validation.util.ts).
+export async function seedMembers(plan: SeedPlan): Promise<void> {
   const repository = AppDataSource.getRepository(Member);
 
-  const membersData = [
-    {
-      idEpik: 1001,
-      fullName: 'Juan Pérez',
-      documentType: 'Cédula de ciudadanía',
-      documentNumber: '100000001',
-      email: 'juan@example.com',
-      phone: '3000000001',
-      program: 'Ingeniería de Sistemas',
-      secondProgram: '',
-    },
-    {
-      idEpik: 1002,
-      fullName: 'María Gómez',
-      documentType: 'Cédula de ciudadanía',
-      documentNumber: '100000002',
-      email: 'maria@example.com',
-      phone: '3000000002',
-      program: 'Administración',
-      secondProgram: '',
-    },
-  ];
+  const existing = await repository.find();
+  const existingIdEpiks = new Set(existing.map((member) => member.idEpik));
 
-  for (const data of membersData) {
-    const existing = await repository.findOne({
-      where: {
-        idEpik: data.idEpik,
-      },
-    });
+  const missing = plan.members
+    .filter((data) => !existingIdEpiks.has(data.idEpik))
+    .map((data) => repository.create(data));
 
-    if (existing) {
-      console.log(`Miembro "${existing.fullName}" ya existe.`);
-      continue;
-    }
-
-    const member = repository.create(data);
-
-    await repository.save(member);
-
-    console.log(`Miembro "${member.fullName}" creado.`);
+  for (const block of chunk(missing, CHUNK_SIZE)) {
+    await repository.save(block);
   }
+
+  logStep('Integrantes', missing.length, plan.members.length - missing.length);
 }

@@ -13,6 +13,7 @@ withDefaults(defineProps<{ sheet: PermanenceSheetView; readonly?: boolean }>(), 
 const emit = defineEmits<{
   // `null` = celda vacía (se borra el puntaje registrado, si lo había).
   setValue: [activityId: number, memberId: number, value: Nullable<number>];
+  viewActivity: [activityId: number];
   editActivity: [activityId: number];
   deleteActivity: [activityId: number];
 }>();
@@ -69,8 +70,19 @@ function rowClass(row: PermanenceRow): string {
                   peso {{ activity.weight }}%
                 </span>
               </span>
-              <span v-if="!readonly" class="flex shrink-0 gap-1">
+              <span class="flex shrink-0 gap-1">
+                <!-- Ver detalle no modifica nada, por eso también está
+                     disponible en modo solo lectura. -->
                 <button
+                  type="button"
+                  class="rounded p-1 text-slate-400 transition hover:bg-slate-200 hover:text-brand-700"
+                  title="Ver actividad"
+                  @click="emit('viewActivity', activity.id)"
+                >
+                  <i class="fa-solid fa-eye text-[10px]" />
+                </button>
+                <button
+                  v-if="!readonly"
                   type="button"
                   class="rounded p-1 text-slate-400 transition hover:bg-slate-200 hover:text-brand-700"
                   title="Editar actividad"
@@ -79,6 +91,7 @@ function rowClass(row: PermanenceRow): string {
                   <i class="fa-solid fa-pen text-[10px]" />
                 </button>
                 <button
+                  v-if="!readonly"
                   type="button"
                   class="rounded p-1 text-slate-400 transition hover:bg-red-100 hover:text-red-500"
                   title="Eliminar actividad"
